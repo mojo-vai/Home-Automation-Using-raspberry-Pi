@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Home Automation Dashboard</title>
+    <style>
+        body {
+            font-family: Arial;
+            background: #f2f2f2;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px #aaa;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button.off {
+            background: #d9534f;
+        }
+        #chatbox {
+            width: 100%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        #reply {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        #speedValue {
+            font-weight: bold;
+        }
+
+        /* ---- LOGIN OVERLAY ---- */
+        #loginOverlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #loginCard {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            width: 300px;
+            box-shadow: 0 0 20px #000;
+            text-align: center;
+        }
+        #loginCard input {
+            width: 90%;
+            padding: 8px;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginOverlay">
+    <div id="loginCard">
+        <h2>Login</h2>
+        <input id="email" type="email" placeholder="Email">
+        <input id="password" type="password" placeholder="Password">
+        <br><br>
+        <button onclick="login()">Login</button>
+        <button onclick="signup()">Sign Up</button>
+        <p id="authMsg"></p>
+    </div>
+</div>
+
+<!-- ================= DASHBOARD (YOUR UI) ================= -->
+<div id="dashboard" style="display:none;">
+
+<h1>Raspberry Pi Home Automation</h1>
+
+<!-- LIGHT CONTROL -->
+<div class="card">
+    <h2>Light Control</h2>
+    <button onclick="controlLight('on')">Turn Light ON</button>
+    <button class="off" onclick="controlLight('off')">Turn Light OFF</button>
+    <p id="lightStatus"></p>
+</div>
+
+<!-- FAN CONTROL -->
+<div class="card">
+    <h2>Fan Control (RGB Speed Simulation)</h2>
+
+    <button onclick="fanPower('on')">Fan ON</button>
+    <button class="off" onclick="fanPower('off')">Fan OFF</button>
+
+    <br><br>
+
+    <input type="range" id="fanSlider" min="0" max="100" value="0" oninput="updateFanSpeed()">
+    <p>Speed: <span id="speedValue">0%</span></p>
+
+    <p id="fanStatus"></p>
+</div>
+
+<!-- CHATBOT -->
+<div class="card">
+    <h2>Chatbot Control</h2>
+    <input id="chatbox" placeholder="Say something like 'turn on fan', 'set fan to 70'">
+    <button onclick="sendChat()">Send</button>
+    <p id="reply"></p>
+</div>
+
+<button onclick="logout()">Logout</button>
+</div>
+
+<!-- ================= FIREBASE ================= -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<script>
+/* 🔴 REPLACE WITH YOUR FIREBASE CONFIG */
+const firebaseConfig = {
+    apiKey: "AIzaSyB84Dt8RrVXKnyM4gaMb4rp1u9VDz5WPrQ",
+    authDomain: "home-automation-system-f751d.firebaseapp.com",
+    projectId: "home-automation-system-f751d",
+    storageBucket: "home-automation-system-f751d.firebasestorage.app",
+    messagingSenderId: "42228875074",
+    appId: "1:42228875074:web:4f91325ee62944bc5fd2db",
+    measurementId: "G-YJB8F1LSCE"
+  };
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+</script>
+
+<script>
+function signup() {
+    auth.createUserWithEmailAndPassword(email.value, password.value)
+        .catch(e => authMsg.innerText = e.message);
+}
+
+function login() {
+    auth.signInWithEmailAndPassword(email.value, password.value)
+        .catch(e => authMsg.innerText = e.message);
+}
+
+function logout() {
+    auth.signOut();
+}
+
+auth.onAuthStateChanged(user => {
+    if (user) {
+        loginOverlay.style.display = "none";
+        dashboard.style.display = "block";
+    } else {
+        loginOverlay.style.display = "flex";
+        dashboard.style.display = "none";
+    }
+});
+
+/* ---- AUTH FETCH ---- */
+function authFetch(url, options = {}) {
+    return auth.currentUser.getIdToken().then(token => {
+        options.headers = options.headers || {};
+        options.headers["Authorization"] = "Bearer " + token;
+        return fetch(url, options);
+    });
+}
+
+/* ---------------- LIGHT CONTROL ---------------- */
+function controlLight(action) {
+    authFetch(`/light/${action}`)
+        .then(res => res.text())
+        .then(data => lightStatus.innerText = data);
+}
+
+/* ---------------- FAN POWER ---------------- */
+function fanPower(action) {
+    authFetch(`/fan/power/${action}`)
+        .then(res => res.text())
+        .then(data => fanStatus.innerText = data);
+}
+
+/* ---------------- FAN SPEED ---------------- */
+function updateFanSpeed() {
+    let speed = fanSlider.value;
+    speedValue.innerText = speed + "%";
+
+    authFetch(`/fan/speed/${speed}`)
+        .then(res => res.text())
+        .then(data => fanStatus.innerText = data);
+}
+
+/* ---------------- CHATBOT ---------------- */
+function sendChat() {
+    authFetch("/chat", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({message: chatbox.value})
+    })
+    .then(res => res.json())
+    .then(data => reply.innerText = data.reply);
+}
+</script>
+
+</body>
+</html>
